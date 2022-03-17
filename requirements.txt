@@ -1,0 +1,6 @@
+certifi==2021.10.8
+comtypes==1.1.4
+numpy==1.21.5
+opencv-python==4.5.5.64
+pykinect2==0.1.0
+wincertstore==0.2
