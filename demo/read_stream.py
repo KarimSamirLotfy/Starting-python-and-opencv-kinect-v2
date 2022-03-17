@@ -4,7 +4,8 @@ import pickle
 import time 
 import datetime
 
-from pykinect2 import PyKinectV2
+#from pykinect2 import PyKinectV2
+from .pykinect2 import PyKinectV2
 from pykinect2.PyKinectV2 import *
 from pykinect2 import PyKinectRuntime
 
@@ -28,8 +29,8 @@ def save_frames(FILE_NAME):
     fpsmax = 0
     fpsmin = 100
     
-    # display_type = "COLOUR"
-    display_type = "DEPTH"
+    display_type = "COLOUR"
+    #display_type = "DEPTH"
     
     # Actual recording loop, exit by pressing escape to close the pop-up window
     while True:
