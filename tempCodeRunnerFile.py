@@ -1,1 +1,1 @@
-CV_32F
+            # img= img.astype(np.uint8)

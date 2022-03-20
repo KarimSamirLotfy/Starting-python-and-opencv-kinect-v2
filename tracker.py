@@ -5,6 +5,7 @@ import time
 from tkinter import S
 from unittest import case
 from xmlrpc.client import Boolean
+from body_index import bodyIndex
 from body_skeleton import JOINT, TRACKING_STATE, Skeleton
 from pykinect2 import PyKinectV2
 from pykinect2 import PyKinectRuntime
@@ -22,14 +23,22 @@ class tracker_types(Enum):
 class tracker:
     """class that gives all vues using funciton calls also has a debugger screen for all the views in opencv2
     """
+    COLORS= [
+        [252, 186, 3],
+        [48, 250, 2 ],
+        [2, 247, 223],
+        [2, 158, 247],
+        [5, 5, 242],
+        [205, 7, 240]
+    ]
     def __init__(self, *args: tracker_types) -> None:
         
 
         # TODO: for each tracker make the Runtime with the output
-        self._kinect = PyKinectRuntime.PyKinectRuntime(PyKinectV2.FrameSourceTypes_Body | PyKinectV2.FrameSourceTypes_Color)
+        self._kinect = PyKinectRuntime.PyKinectRuntime(PyKinectV2.FrameSourceTypes_Body | PyKinectV2.FrameSourceTypes_Color | PyKinectV2.FrameSourceTypes_BodyIndex )
         self._body_skeleton= bodySkeleton(self._kinect)
         self._color_image= colorImage(self._kinect)
-
+        self._body_index = bodyIndex(self._kinect)
     def __enter__(self):
         print('tracker started')
         return self
@@ -50,11 +59,38 @@ class tracker:
         self._kinect.close()
         print('bodySkeleton end')
     def get_body_data(self):
+
         data=self._body_skeleton.get_kinect_data()
-        #print(data, sep='\n')
+       
         data= list(filter(lambda x: x.tracked, data))
         return data # send only data of the tracked bodies not the rest
-    
+    def get_index_data(self):
+        data= self._body_index.get_kinect_data()
+        return data
+
+    def show_index_body(self, return_img=False):
+        """method that displays the camera at max size"""
+        def index_to_color_mapper(element):
+            
+            if element > len(self.COLORS):
+                return np.array([0, 0, 0], dtype=np.uint8)
+            return np.array(self.COLORS[element], dtype=np.uint8)
+        while True:
+            img=self.get_index_data() 
+            shape=img.shape + (3,)
+            img= img.flatten()
+            img = np.array(list(map(index_to_color_mapper, img)))
+            img=np.reshape(img, shape)
+            # img= img.astype(np.uint8)
+
+            if return_img:
+                return img
+            cv2.imshow('image', img)
+            if cv2.waitKey(1) == ord('q'):
+                break
+        cv2.destroyAllWindows()
+
+
     def get_camera_data(self):
         data= self._color_image.get_kinect_data()
         return data
@@ -86,7 +122,7 @@ class tracker:
         while True:
             img1 = self.show_skeleton(return_img=True)
             img2 = self.show_camera(return_img=True)
-            print(img1, img2, sep='-----------\n' ,end='--------- >>> ---------<<< \n')
+           
             img = cv2.addWeighted(img1, 0.5, img2, 0.5, 0, dtype = cv2.CV_8U) # choosing the datype is because of a short lived bug in cv2 version 4.04
             if return_img:
                 return img
@@ -157,7 +193,9 @@ class tracker:
 if __name__ == "__main__":
     with tracker(tracker_types.BODY_SKELTETON, tracker_types.COLOR_IMAGE) as trkr:
         time.sleep(3)
-        trkr.show_camera_skeleton()
+        a= trkr.show_index_body()
+      
+        
 
 
 
