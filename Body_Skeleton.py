@@ -4,13 +4,8 @@ from unittest import case
 from xmlrpc.client import Boolean
 from pykinect2 import PyKinectV2
 from pykinect2 import PyKinectRuntime
-import ctypes
-import _ctypes
-import pygame
-import sys
 from enum import Enum
 
-import pykinect2
 class TRACKING_STATE(Enum):
     """This is a class to describe the state of the JOINT as tracked, not tracked or infered"""
     def get_state(self, val: PyKinectV2._TrackingState) -> None:
@@ -97,11 +92,15 @@ class Skeleton:
     ThumbRight: JOINT= None
     ID: int= None
     tracked: bool= None
+    def __init__(self) -> None:
+        self.old__repr__ = self.__repr__
+
     def __setitem__(self,joint_index:int ,Joint_value: JOINT):
         setattr(self, index_to_joint_name[joint_index], Joint_value)
         
     def __getitem__(self,joint_index):
-        getattr(self, index_to_joint_name[joint_index])
+        return getattr(self, index_to_joint_name[joint_index])
+
 
     
 class bodySkeleton():
@@ -139,7 +138,7 @@ class bodySkeleton():
         self._kinect.close()
         print('bodySkeleton end')
 
-    def get_kinect_data(self):
+    def get_kinect_data(self) -> 'list[Skeleton]':
     # here we get the body data from kinect or simply keep the old data
         if self._kinect.has_new_body_frame(): 
             self._bodies = self._kinect.get_last_body_frame()
@@ -153,32 +152,34 @@ class bodySkeleton():
                     self.skeletons[i].tracked = False
                     continue 
                 
-                self.skeletons[i].tracked = True
                 joints = body.joints 
                 # convert joint coordinates to color space 
                 joint_points = self._kinect.body_joints_to_color_space(joints)
-                self.skeletons[i]= self.update_body_points(joints, joint_points)
+                self.skeletons[i]= self.update_body_points(joints, joint_points,self.skeletons[i])
                 break
         return self.skeletons
     
-    def update_body_points(self, joints, joint_points):
-        skeleton = Skeleton()
+    def update_body_points(self, joints, joint_points, skeleton:Skeleton):
+        skeleton.tracked=True
         for i in range(PyKinectV2.JointType_Count):
-            print(i)
-            print(joints[i].TrackingState)
-            print(joint_points[i].x, joint_points[i].y)
             j= JOINT(x=joint_points[i].x, y=joint_points[i].y, state=TRACKING_STATE(joints[i].TrackingState))
             skeleton[i]= j
         return skeleton
-class JOINTS(Enum):
-    SpineBase = 1
-    SpineMid = 2
+
+    def show(self):
+        # TODO: Create with opencv a show of these points in some way to make sure they are working and move to next step we keda
+        pass
 
 if __name__ == "__main__":
     with bodySkeleton() as tracker:
-        while True:
-            a=tracker.get_kinect_data()            
-            print(a)
+        for i in range(2000):
+            a=tracker.get_kinect_data()  
+                     
+            for skeleton in a:
+                if skeleton.tracked:
+                    print(skeleton)
+                else:
+                    print('-----Untracked Skeleton------')
             #tracker.update_body_points(None, None)
 
 
