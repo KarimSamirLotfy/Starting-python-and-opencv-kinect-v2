@@ -5,11 +5,8 @@ import time
 from tkinter import S
 from unittest import case
 from xmlrpc.client import Boolean
-
-from numpy import dtype
 from body_index import bodyIndex
 from body_skeleton import JOINT, TRACKING_STATE, Skeleton
-from depth import depth
 from pykinect2 import PyKinectV2
 from pykinect2 import PyKinectRuntime
 import ctypes
@@ -21,7 +18,9 @@ from body_skeleton import bodySkeleton
 from color_image import colorImage
 import numpy as np
 
-import pykinect2
+# this is for preformance
+import cProfile
+import pstats
 class tracker_types(Enum):
     BODY_SKELTETON= bodySkeleton
     COLOR_IMAGE= colorImage
@@ -40,11 +39,10 @@ class tracker:
         
 
         # TODO: for each tracker make the Runtime with the output
-        self._kinect = PyKinectRuntime.PyKinectRuntime(PyKinectV2.FrameSourceTypes_Body | PyKinectV2.FrameSourceTypes_Color | PyKinectV2.FrameSourceTypes_BodyIndex | PyKinectV2.FrameSourceTypes_Depth)
+        self._kinect = PyKinectRuntime.PyKinectRuntime(PyKinectV2.FrameSourceTypes_Body | PyKinectV2.FrameSourceTypes_Color | PyKinectV2.FrameSourceTypes_BodyIndex )
         self._body_skeleton= bodySkeleton(self._kinect)
         self._color_image= colorImage(self._kinect)
         self._body_index = bodyIndex(self._kinect)
-        self._depth=depth(self._kinect)
     def __enter__(self):
         print('tracker started')
         return self
@@ -85,8 +83,10 @@ class tracker:
             img=self.get_index_data() 
             shape=img.shape + (3,)
             img= img.flatten()
-            img = np.array(list(map(index_to_color_mapper, img)))
-            img=np.reshape(img, shape)
+            # img = np.array(list(map(index_to_color_mapper, img)))
+            # img=np.reshape(img, shape)
+            img[img==255] = np.array([0, 0, 0])
+
             # img= img.astype(np.uint8)
 
             if return_img:
@@ -96,54 +96,6 @@ class tracker:
                 break
         cv2.destroyAllWindows()
 
-    def get_depth_data(self):
-        data= self._depth.get_kinect_data()
-        return data
-
-    def get_body_data_with_depth(self):
-        data_depth= self.get_depth_data() # is in form (424, 512)
-        data_body= self.get_body_data() # relative to cam data which is (1080, 1920)
-        cam_width, cam_height = 1920, 1080
-        depth_width, depth_height = 512, 424  
-
-        # here we add the depth data for each joint if you want it to be used
-        for body in data_body:
-            for i in range(PyKinectV2.JointType_Count):
-                if body[i].state != TRACKING_STATE.Tracked: # if this is not tracked skip adding the depth to it
-                    continue
-                x, y = body[i].x, body[i].y # real x and y in cam image
-                #print(f'points:{x, y}')
-                xs,ys = math.floor((x * depth_width)/cam_width), math.floor((y * depth_height)/cam_height)
-                #print(f'data shape: {data_depth.shape}, {cam_data.shape}')
-                #print(f'points:{x, y}, maped:{xs, ys}, calc:{(x * depth_width)/cam_width, (y * depth_height)/cam_height}, midway:{x * depth_width,y * depth_height}')
-                #print(data_depth[1, 3], data_depth[min(xs, 423), min(ys, 511)])
-                depth : np.ndarray = data_depth[min(xs, 423),  min(ys, 511)]
-                body[i].z= depth.astype(int)
-                
-
-        print(' get data')
-        for body in data_body:
-            for i in range(PyKinectV2.JointType_Count):
-                if body[i].state == TRACKING_STATE.Tracked:
-                    z= body[i].z
-                    #print(i, z)
-                if z is None:
-                    print('a7ooooooooooo')
-           
-        return data_body
-
-
-    
-    def show_depth_image(self, return_img=False):
-        while True:
-            img= self.get_depth_data()
-            img_color_space= np.rint(np.interp(img, (0, 6000), (0, 255))).astype(np.uint8)
-            if return_img:
-                return img_color_space
-            cv2.imshow('image', img_color_space)
-            if cv2.waitKey(1) == ord('q'):
-                break
-        cv2.destroyAllWindows()
 
     def get_camera_data(self):
         data= self._color_image.get_kinect_data()
@@ -244,67 +196,19 @@ class tracker:
             pass # do not draw anything
         return None
 
-
-    def show_hand_proximity(self, return_img=False):
-        """shows on your hand a circle that growns bigger the closer your hand is relative to the depth sensor"""
-        LEFT_HAND_INDEX= 7
-        while True:
-            img= self.show_camera_skeleton(return_img=True)
-            body_data=self.get_body_data_with_depth()
-            #print('in display data')
-            for body in body_data:
-                for i in range(PyKinectV2.JointType_Count):
-                    if body[i].state == TRACKING_STATE.Tracked:
-                        z= body[i].z
-                        #print(i,z)
-                    if z is None:
-                        print('a7ooooooooooo')
-           
-            
-            #time.sleep(3)
-            
-            # Center coordinates
-            #print(body_data)
-            for body in body_data:
-                if not body.tracked:
-                    continue
-                left_hand_x, left_hand_y, left_hand_depth, state = body[7].x, body[7].y, body[7].z, body[7].state
-                if state == TRACKING_STATE.Tracked:
-            
-                    center_coordinates = (int(left_hand_x), int(left_hand_y))
-                    
-                    # Radius of circle
-                    radius = np.interp(left_hand_depth, (100, 3000), (500, 10)).astype(np.uint8)
-                    print(left_hand_depth, radius, type(radius), radius.astype(np.int), type(radius.astype(np.int)))
-                    # Blue color in BGR
-                    color = (255, 0, 0)
-                    
-                    # Line thickness of 2 px
-                    thickness = 2
-                    img = cv2.circle(img, center_coordinates, radius, color, thickness)
-
-                #print(left_hand_x, left_hand_y, left_hand_depth, state)
-            if return_img:
-                return img
-            
-            cv2.imshow('image', img)
-            if cv2.waitKey(1) == ord('q'):
-                break
-        cv2.destroyAllWindows()     
-            
-
-
-
 if __name__ == "__main__":
+    profiler = cProfile.Profile(subcalls=True, builtins=True, timeunit=0.001,)
+    profiler.enable()
     with tracker(tracker_types.BODY_SKELTETON, tracker_types.COLOR_IMAGE) as trkr:
-        time.sleep(5)
-        timeout = 8   # [seconds]
-        timeout_start = time.time()
-        while time.time() < timeout_start + timeout:
-            a= trkr.show_hand_proximity()
-            time.sleep(0.3)
-            break
-            #print(a, a.shape, np.min(a), np.max(a), np.average(a))
+        time.sleep(3)
+        a= trkr.show_index_body()
+    
+    profiler.disable()
+    profiler.print_stats()
+    stats= pstats.Stats(profiler)
+    stats.sort_stats(pstats.SortKey.TIME)
+    stats.print_stats()
+    
       
         
 

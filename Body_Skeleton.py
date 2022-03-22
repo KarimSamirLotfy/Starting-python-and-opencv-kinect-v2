@@ -1,5 +1,6 @@
 import dataclasses
 from operator import index
+from typing import Union
 from unittest import case
 from xmlrpc.client import Boolean
 from pykinect2 import PyKinectV2
@@ -26,6 +27,8 @@ class JOINT:
     x: float
     y: float
     state: TRACKING_STATE
+    # optional
+    z: Union[float, None] = None
 
 index_to_joint_name = {
     0:'SpineBase',
@@ -98,7 +101,7 @@ class Skeleton:
     def __setitem__(self,joint_index:int ,Joint_value: JOINT):
         setattr(self, index_to_joint_name[joint_index], Joint_value)
         
-    def __getitem__(self,joint_index):
+    def __getitem__(self,joint_index: int) -> JOINT:
         return getattr(self, index_to_joint_name[joint_index])
 
 
