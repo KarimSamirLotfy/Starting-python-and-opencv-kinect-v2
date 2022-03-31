@@ -10,6 +10,7 @@ from numpy import dtype
 from body_index import bodyIndex
 from body_skeleton import JOINT, TRACKING_STATE, Skeleton
 from depth import depth
+from filters import kernel_average_filter, temporal_average_filter
 from pykinect2 import PyKinectV2
 from pykinect2 import PyKinectRuntime
 import ctypes
@@ -36,8 +37,8 @@ class tracker:
         [5, 5, 242],
         [205, 7, 240]
     ]
-    def __init__(self, *args: tracker_types) -> None:
-        
+    def __init__(self, depth_filters: 'list[filter]'=[]) -> None:
+        self.depth_filters = depth_filters
 
         # TODO: for each tracker make the Runtime with the output
         self._kinect = PyKinectRuntime.PyKinectRuntime(PyKinectV2.FrameSourceTypes_Body | PyKinectV2.FrameSourceTypes_Color | PyKinectV2.FrameSourceTypes_BodyIndex | PyKinectV2.FrameSourceTypes_Depth)
@@ -46,6 +47,7 @@ class tracker:
         self._body_index = bodyIndex(self._kinect)
         self._depth=depth(self._kinect)
     def __enter__(self):
+        time.sleep(3) # give the kinect 3 seconds to boot up 
         print('tracker started')
         return self
     def __exit__(self, exc_type, exc_value, exc_traceback):
@@ -98,6 +100,11 @@ class tracker:
 
     def get_depth_data(self):
         data= self._depth.get_kinect_data()
+        #print(data[55:70, 100:120])
+        for depth_filter in self.depth_filters:
+            data = depth_filter.filter(data)
+        #print(data[55:70, 100:120])
+        
         return data
 
     def get_body_data_with_depth(self):
@@ -114,21 +121,12 @@ class tracker:
                 x, y = body[i].x, body[i].y # real x and y in cam image
                 #print(f'points:{x, y}')
                 xs,ys = math.floor((x * depth_width)/cam_width), math.floor((y * depth_height)/cam_height)
-                #print(f'data shape: {data_depth.shape}, {cam_data.shape}')
-                #print(f'points:{x, y}, maped:{xs, ys}, calc:{(x * depth_width)/cam_width, (y * depth_height)/cam_height}, midway:{x * depth_width,y * depth_height}')
-                #print(data_depth[1, 3], data_depth[min(xs, 423), min(ys, 511)])
+
                 depth : np.ndarray = data_depth[min(xs, 423),  min(ys, 511)]
-                body[i].z= depth.astype(int)
+                body[i].z= depth.astype(np.int32)
                 
 
-        print(' get data')
-        for body in data_body:
-            for i in range(PyKinectV2.JointType_Count):
-                if body[i].state == TRACKING_STATE.Tracked:
-                    z= body[i].z
-                    #print(i, z)
-                if z is None:
-                    print('a7ooooooooooo')
+
            
         return data_body
 
@@ -245,66 +243,111 @@ class tracker:
         return None
 
 
-    def show_hand_proximity(self, return_img=False):
+    def show_hand_proximity(self, return_img=False, with_depth_img=False):
         """shows on your hand a circle that growns bigger the closer your hand is relative to the depth sensor"""
-        LEFT_HAND_INDEX= 7
+        LEFT_HAND_INDEX= 12
         while True:
             img= self.show_camera_skeleton(return_img=True)
             body_data=self.get_body_data_with_depth()
-            #print('in display data')
-            for body in body_data:
-                for i in range(PyKinectV2.JointType_Count):
-                    if body[i].state == TRACKING_STATE.Tracked:
-                        z= body[i].z
-                        #print(i,z)
-                    if z is None:
-                        print('a7ooooooooooo')
+            
            
             
-            #time.sleep(3)
+            time.sleep(0.2)
             
             # Center coordinates
             #print(body_data)
             for body in body_data:
                 if not body.tracked:
                     continue
-                left_hand_x, left_hand_y, left_hand_depth, state = body[7].x, body[7].y, body[7].z, body[7].state
+                left_hand_x, left_hand_y, left_hand_depth, state = body[LEFT_HAND_INDEX].x, body[LEFT_HAND_INDEX].y, body[LEFT_HAND_INDEX].z, body[LEFT_HAND_INDEX].state
                 if state == TRACKING_STATE.Tracked:
             
                     center_coordinates = (int(left_hand_x), int(left_hand_y))
                     
                     # Radius of circle
-                    radius = np.interp(left_hand_depth, (100, 3000), (500, 10)).astype(np.uint8)
-                    print(left_hand_depth, radius, type(radius), radius.astype(np.int), type(radius.astype(np.int)))
+                    # radius = np.interp(left_hand_depth, (100, 5000), (300, 10))[0]
+                    # radius = radius.astype(np.int8)
+                    radius = 30
+                    #print(f'{radius}, {type(radius)}')
                     # Blue color in BGR
                     color = (255, 0, 0)
                     
                     # Line thickness of 2 px
                     thickness = 2
-                    img = cv2.circle(img, center_coordinates, radius, color, thickness)
+                    cv2.circle(img, center_coordinates, radius, color, thickness)
+                    font = cv2.FONT_HERSHEY_SIMPLEX
+                    cv2.putText(img, f'depth:{left_hand_depth}', (10,450), font, 3, (0, 255, 0), 2, cv2.LINE_AA)
 
-                #print(left_hand_x, left_hand_y, left_hand_depth, state)
+               
             if return_img:
                 return img
+            
+            
+
             
             cv2.imshow('image', img)
             if cv2.waitKey(1) == ord('q'):
                 break
         cv2.destroyAllWindows()     
             
+    def show_img_skeleton_and_depth_img_of_joint(self, JOINT_INDEX:int= 12, return_img=False) -> 'tuple[np.ndarray, np.ndarray]':
+        while True:
+            img= self.show_camera_skeleton(return_img=True)
+            body_data=self.get_body_data_with_depth()      
+
+            ### depth data
+            data_depth= self.get_depth_data() # is in form (424, 512)
+            cam_width, cam_height = 1920, 1080
+            depth_width, depth_height = 512, 424        
+            depth_img= self.show_depth_image(return_img=True)
+            for body in body_data:
+                if not body.tracked:
+                    continue
+                left_hand_x, left_hand_y, left_hand_depth, state = body[JOINT_INDEX].x, body[JOINT_INDEX].y, body[JOINT_INDEX].z, body[JOINT_INDEX].state
+                if state == TRACKING_STATE.Tracked:
+                    center_coordinates = (int(left_hand_x), int(left_hand_y))
+                    radius = 30
+                    color = (255, 0, 0)
+                    thickness = 2
+                    cv2.circle(img, center_coordinates, radius, color, thickness)
+                    font = cv2.FONT_HERSHEY_SIMPLEX
+                    cv2.putText(img, f'depth:{left_hand_depth}', (10,450), font, 3, (0, 255, 0), 2, cv2.LINE_AA)
+
+
+                ### add the depth img
+                x, y = body[JOINT_INDEX].x, body[JOINT_INDEX].y # real x and y in cam image
+               
+                xs,ys = math.floor((x * depth_width)/cam_width), math.floor((y * depth_height)/cam_height)
+
+                # draw circle in depth img 
+                depth_img = cv2.cvtColor(depth_img, cv2.COLOR_GRAY2RGB)
+                cv2.circle(depth_img, center=(xs, ys), radius=20, color=(255, 0, 0), thickness=2)
+
+                
+               
+            if return_img:
+                return (img, depth_img)
+            
+            
+
+            
+            cv2.imshow('image', img)
+            cv2.imshow('depth image', depth_img)
+            if cv2.waitKey(1) == ord('q'):
+                break
+        cv2.destroyAllWindows()   
 
 
 
 if __name__ == "__main__":
-    with tracker(tracker_types.BODY_SKELTETON, tracker_types.COLOR_IMAGE) as trkr:
+    with tracker(depth_filters=[temporal_average_filter(temporal_length=3)]) as trkr:
         time.sleep(5)
-        timeout = 8   # [seconds]
+        timeout = 4   # [seconds]
         timeout_start = time.time()
         while time.time() < timeout_start + timeout:
-            a= trkr.show_hand_proximity()
-            time.sleep(0.3)
-            break
-            #print(a, a.shape, np.min(a), np.max(a), np.average(a))
+            a= trkr.show_img_skeleton_and_depth_img_of_joint(JOINT_INDEX=0) # 3 head, 0 spine base
+            
+            
       
         
 
