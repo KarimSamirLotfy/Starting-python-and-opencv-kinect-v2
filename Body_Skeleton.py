@@ -1,11 +1,17 @@
 import dataclasses
 from operator import index
+import time
 from typing import Union
 from unittest import case
 from xmlrpc.client import Boolean
+
+from numpy import ndarray
+from depth import depth
 from pykinect2 import PyKinectV2
 from pykinect2 import PyKinectRuntime
 from enum import Enum
+
+import pykinect2
 
 class TRACKING_STATE(Enum):
     """This is a class to describe the state of the JOINT as tracked, not tracked or infered"""
@@ -114,10 +120,11 @@ class bodySkeleton():
     def __init__(self, kinect=None):
 
         if not kinect:
-            self._kinect = PyKinectRuntime.PyKinectRuntime(PyKinectV2.FrameSourceTypes_Body)
+            self._kinect = PyKinectRuntime.PyKinectRuntime(PyKinectV2.FrameSourceTypes_Body | PyKinectV2.FrameSourceTypes_Depth)
         else:
             self._kinect= kinect
         self._bodies=None
+        self._depth= depth(self._kinect)
         self.skeletons = [Skeleton() for _ in range(self._kinect.max_body_count)] # this will be the main python dict that we will use to store all the info
         
     def __enter__(self):
@@ -148,6 +155,8 @@ class bodySkeleton():
         else:
             self._bodies = self._bodies # keep the last bodies frame as it is the last frame
             # TODO: keep track of the time it took to get this frame for sync 
+
+        
         if self._bodies is not None: # if there are any bodies tracked ?? 
             for i in range(0, self._kinect.max_body_count): # for each of the max 6 ppl
                 body = self._bodies.bodies[i] 
@@ -158,14 +167,26 @@ class bodySkeleton():
                 joints = body.joints 
                 # convert joint coordinates to color space 
                 joint_points = self._kinect.body_joints_to_color_space(joints)
-                self.skeletons[i]= self.update_body_points(joints, joint_points,self.skeletons[i])
+                
+                joints_depths = self._kinect.body_joints_to_depth_space(joints) # maps the camera coordinates to the depth image we keda 
+
+                self.skeletons[i]= self.update_body_points(joints, joint_points, joints_depths, self.skeletons[i])
                 break
         return self.skeletons
     
-    def update_body_points(self, joints, joint_points, skeleton:Skeleton):
+    def update_body_points(self, joints, joint_points:ndarray, joints_depths: ndarray,skeleton:Skeleton):
         skeleton.tracked=True
         for i in range(PyKinectV2.JointType_Count):
             j= JOINT(x=joint_points[i].x, y=joint_points[i].y, state=TRACKING_STATE(joints[i].TrackingState))
+            if self._depth is not None:
+                depth_frame = self._depth.get_kinect_data() # here we get the depth frame 
+                #print(joints_depths[i].x,joints_depths[i].y , depth_frame[int(joints_depths[i].x), int(joints_depths[i].y)] )
+                # xs, ys= int(joints_depths[i].x), int(joints_depths[i].y)
+                if  0 >= joints_depths[i].x >= 412 or 0 >= joints_depths[i].y >= 512: 
+                    j.z = depth_frame[int(joints_depths[i].x), int(joints_depths[i].y)] 
+                else:
+                    j.z = None # as the depth point is outside the depth frame so It can not be calculated
+
             skeleton[i]= j
         return skeleton
 
@@ -175,12 +196,16 @@ class bodySkeleton():
 
 if __name__ == "__main__":
     with bodySkeleton() as tracker:
-        for i in range(2000):
+        time.sleep(5)
+        timeout = 4   # [seconds]
+        timeout_start = time.time()
+        while time.time() < timeout_start + timeout:
             a=tracker.get_kinect_data()  
                      
             for skeleton in a:
                 if skeleton.tracked:
-                    print(skeleton)
+                    #print(skeleton)
+                    pass
                 else:
                     print('-----Untracked Skeleton------')
             #tracker.update_body_points(None, None)

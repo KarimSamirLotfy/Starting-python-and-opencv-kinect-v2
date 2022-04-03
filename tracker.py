@@ -276,7 +276,14 @@ class tracker:
                     thickness = 2
                     cv2.circle(img, center_coordinates, radius, color, thickness)
                     font = cv2.FONT_HERSHEY_SIMPLEX
+
+
+                    
                     cv2.putText(img, f'depth:{left_hand_depth}', (10,450), font, 3, (0, 255, 0), 2, cv2.LINE_AA)
+                    cv2.putText(img, f'pos:{center_coordinates}', (15,450), font, 3, (0, 255, 0), 2, cv2.LINE_AA)
+                    # cv2.putText(img, f'pos in color image:{center_coordinates}', (15,450), font, 3, (0, 255, 0), 2, cv2.LINE_AA)
+                    # cv2.putText(img, f'depth after depth:{center_coordinates}', (15,450), font, 3, (0, 255, 0), 2, cv2.LINE_AA)
+
 
                
             if return_img:
@@ -291,7 +298,9 @@ class tracker:
         cv2.destroyAllWindows()     
             
     def show_img_skeleton_and_depth_img_of_joint(self, JOINT_INDEX:int= 12, return_img=False) -> 'tuple[np.ndarray, np.ndarray]':
+        import demo.mapper as mp
         while True:
+            
             img= self.show_camera_skeleton(return_img=True)
             body_data=self.get_body_data_with_depth()      
 
@@ -317,11 +326,12 @@ class tracker:
                 ### add the depth img
                 x, y = body[JOINT_INDEX].x, body[JOINT_INDEX].y # real x and y in cam image
                
-                xs,ys = math.floor((x * depth_width)/cam_width), math.floor((y * depth_height)/cam_height)
+                # xs,ys = joints_depths = self._kinect.body_joint_to_depth_space() # maps the camera coordinates to the depth image we keda 
+                # xs, ys= mp.depth_2_color_space(self._kinect, PyKinectV2._DepthSpacePoint, self._kinect._depth_frame_data)
 
                 # draw circle in depth img 
                 depth_img = cv2.cvtColor(depth_img, cv2.COLOR_GRAY2RGB)
-                cv2.circle(depth_img, center=(xs, ys), radius=20, color=(255, 0, 0), thickness=2)
+                #cv2.circle(depth_img, center=(xs, ys), radius=20, color=(255, 0, 0), thickness=2)
 
                 
                
@@ -340,7 +350,7 @@ class tracker:
 
 
 if __name__ == "__main__":
-    with tracker(depth_filters=[temporal_average_filter(temporal_length=3)]) as trkr:
+    with tracker(depth_filters=[temporal_average_filter(temporal_length=30)]) as trkr:
         time.sleep(5)
         timeout = 4   # [seconds]
         timeout_start = time.time()
