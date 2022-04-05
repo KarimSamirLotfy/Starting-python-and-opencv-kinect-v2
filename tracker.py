@@ -183,47 +183,51 @@ class tracker:
                 break
         cv2.destroyAllWindows()            
 
-    def draw_skeletons(self, img: np.array, body_data: 'List[Skeleton]'):
-        for body in body_data:
+    def draw_skeletons(self, img: np.array, body_data: 'list[Skeleton]'):
+        for idx, body in enumerate(body_data):
             self.draw_body_bones(img, body)
+  
         return img
             
-    def draw_body_bones(self, img, body: Skeleton):
-        color=(255, 255, 0)
-        self.draw_body_bone(img, body, PyKinectV2.JointType_Head, PyKinectV2.JointType_Neck);
+    def draw_body_bones(self, img: np.array, body: Skeleton, color: 'tuple[int]'= (255, 0, 0)):
+        
+        # string_to_show= "nothing to see here but later a lot\n will be super userfull ya 3asal"
+        # pos_of_head_x, pos_of_head_y = int(body.Head.x), int(body.Head.y)
+        # cv2.putText(img, string_to_show, (pos_of_head_x,pos_of_head_y), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2, cv2.LINE_AA)
+        
         # Torso
-        self.draw_body_bone(img, body, PyKinectV2.JointType_Head, PyKinectV2.JointType_Neck);
-        self.draw_body_bone(img, body, PyKinectV2.JointType_Neck, PyKinectV2.JointType_SpineShoulder);
-        self.draw_body_bone(img, body, PyKinectV2.JointType_SpineShoulder, PyKinectV2.JointType_SpineMid);
-        self.draw_body_bone(img, body, PyKinectV2.JointType_SpineMid, PyKinectV2.JointType_SpineBase);
-        self.draw_body_bone(img, body, PyKinectV2.JointType_SpineShoulder, PyKinectV2.JointType_ShoulderRight);
-        self.draw_body_bone(img, body, PyKinectV2.JointType_SpineShoulder, PyKinectV2.JointType_ShoulderLeft);
-        self.draw_body_bone(img, body, PyKinectV2.JointType_SpineBase, PyKinectV2.JointType_HipRight);
-        self.draw_body_bone(img, body, PyKinectV2.JointType_SpineBase, PyKinectV2.JointType_HipLeft);
+        self.draw_body_bone(img, body, PyKinectV2.JointType_Head, PyKinectV2.JointType_Neck, color=color);
+        self.draw_body_bone(img, body, PyKinectV2.JointType_Neck, PyKinectV2.JointType_SpineShoulder, color=color);
+        self.draw_body_bone(img, body, PyKinectV2.JointType_SpineShoulder, PyKinectV2.JointType_SpineMid, color=color);
+        self.draw_body_bone(img, body, PyKinectV2.JointType_SpineMid, PyKinectV2.JointType_SpineBase, color=color);
+        self.draw_body_bone(img, body, PyKinectV2.JointType_SpineShoulder, PyKinectV2.JointType_ShoulderRight, color=color);
+        self.draw_body_bone(img, body, PyKinectV2.JointType_SpineShoulder, PyKinectV2.JointType_ShoulderLeft, color=color);
+        self.draw_body_bone(img, body, PyKinectV2.JointType_SpineBase, PyKinectV2.JointType_HipRight, color=color);
+        self.draw_body_bone(img, body, PyKinectV2.JointType_SpineBase, PyKinectV2.JointType_HipLeft, color=color);
     
         # Right Arm    
-        self.draw_body_bone(img, body, PyKinectV2.JointType_ShoulderRight, PyKinectV2.JointType_ElbowRight);
-        self.draw_body_bone(img, body, PyKinectV2.JointType_ElbowRight, PyKinectV2.JointType_WristRight);
-        self.draw_body_bone(img, body, PyKinectV2.JointType_WristRight, PyKinectV2.JointType_HandRight);
-        self.draw_body_bone(img, body, PyKinectV2.JointType_HandRight, PyKinectV2.JointType_HandTipRight);
-        self.draw_body_bone(img, body, PyKinectV2.JointType_WristRight, PyKinectV2.JointType_ThumbRight);
+        self.draw_body_bone(img, body, PyKinectV2.JointType_ShoulderRight, PyKinectV2.JointType_ElbowRight, color=color);
+        self.draw_body_bone(img, body, PyKinectV2.JointType_ElbowRight, PyKinectV2.JointType_WristRight, color=color);
+        self.draw_body_bone(img, body, PyKinectV2.JointType_WristRight, PyKinectV2.JointType_HandRight, color=color);
+        self.draw_body_bone(img, body, PyKinectV2.JointType_HandRight, PyKinectV2.JointType_HandTipRight, color=color);
+        self.draw_body_bone(img, body, PyKinectV2.JointType_WristRight, PyKinectV2.JointType_ThumbRight, color=color);
 
         # Left Arm
-        self.draw_body_bone(img, body, PyKinectV2.JointType_ShoulderLeft, PyKinectV2.JointType_ElbowLeft);
-        self.draw_body_bone(img, body, PyKinectV2.JointType_ElbowLeft, PyKinectV2.JointType_WristLeft);
-        self.draw_body_bone(img, body, PyKinectV2.JointType_WristLeft, PyKinectV2.JointType_HandLeft);
-        self.draw_body_bone(img, body, PyKinectV2.JointType_HandLeft, PyKinectV2.JointType_HandTipLeft);
-        self.draw_body_bone(img, body, PyKinectV2.JointType_WristLeft, PyKinectV2.JointType_ThumbLeft);
+        self.draw_body_bone(img, body, PyKinectV2.JointType_ShoulderLeft, PyKinectV2.JointType_ElbowLeft, color=color);
+        self.draw_body_bone(img, body, PyKinectV2.JointType_ElbowLeft, PyKinectV2.JointType_WristLeft, color=color);
+        self.draw_body_bone(img, body, PyKinectV2.JointType_WristLeft, PyKinectV2.JointType_HandLeft, color=color);
+        self.draw_body_bone(img, body, PyKinectV2.JointType_HandLeft, PyKinectV2.JointType_HandTipLeft, color=color);
+        self.draw_body_bone(img, body, PyKinectV2.JointType_WristLeft, PyKinectV2.JointType_ThumbLeft, color=color);
 
         # Right Leg
-        self.draw_body_bone(img, body, PyKinectV2.JointType_HipRight, PyKinectV2.JointType_KneeRight);
-        self.draw_body_bone(img, body, PyKinectV2.JointType_KneeRight, PyKinectV2.JointType_AnkleRight);
-        self.draw_body_bone(img, body, PyKinectV2.JointType_AnkleRight, PyKinectV2.JointType_FootRight);
+        self.draw_body_bone(img, body, PyKinectV2.JointType_HipRight, PyKinectV2.JointType_KneeRight, color=color);
+        self.draw_body_bone(img, body, PyKinectV2.JointType_KneeRight, PyKinectV2.JointType_AnkleRight, color=color);
+        self.draw_body_bone(img, body, PyKinectV2.JointType_AnkleRight, PyKinectV2.JointType_FootRight, color=color);
 
         # Left Leg
-        self.draw_body_bone(img, body, PyKinectV2.JointType_HipLeft, PyKinectV2.JointType_KneeLeft);
-        self.draw_body_bone(img, body, PyKinectV2.JointType_KneeLeft, PyKinectV2.JointType_AnkleLeft);
-        self.draw_body_bone(img, body, PyKinectV2.JointType_AnkleLeft, PyKinectV2.JointType_FootLeft);
+        self.draw_body_bone(img, body, PyKinectV2.JointType_HipLeft, PyKinectV2.JointType_KneeLeft, color=color);
+        self.draw_body_bone(img, body, PyKinectV2.JointType_KneeLeft, PyKinectV2.JointType_AnkleLeft, color=color);
+        self.draw_body_bone(img, body, PyKinectV2.JointType_AnkleLeft, PyKinectV2.JointType_FootLeft, color=color);
 
     def draw_body_bone(self, img, body:Skeleton, joint_1, joint_2, color=(255, 0, 255) ):
         joint1: JOINT= body[joint_1]
@@ -237,7 +241,7 @@ class tracker:
         try:
             starting_point = int( body[joint_1].x), int(body[joint_1].y)
             end_point = int(body[joint_2].x), int(body[joint_2].y)
-            cv2.line(img, starting_point, end_point, color=color)
+            cv2.line(img, starting_point, end_point, color=color, thickness=4)
         except OverflowError: # sometimes the numbers are infinty
             pass # do not draw anything
         return None
@@ -249,10 +253,6 @@ class tracker:
         while True:
             img= self.show_camera_skeleton(return_img=True)
             body_data=self.get_body_data_with_depth()
-            
-           
-            
-            time.sleep(0.2)
             
             # Center coordinates
             #print(body_data)
@@ -348,14 +348,14 @@ class tracker:
         cv2.destroyAllWindows()   
 
 
-
+# today we will make this multi user with no problems ISA
 if __name__ == "__main__":
     with tracker(depth_filters=[temporal_average_filter(temporal_length=30)]) as trkr:
         time.sleep(5)
         timeout = 4   # [seconds]
         timeout_start = time.time()
         while time.time() < timeout_start + timeout:
-            a= trkr.show_img_skeleton_and_depth_img_of_joint(JOINT_INDEX=0) # 3 head, 0 spine base
+            a= trkr.show_skeleton() # 3 head, 0 spine base
             
             
       

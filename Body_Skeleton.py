@@ -10,7 +10,7 @@ from depth import depth
 from pykinect2 import PyKinectV2
 from pykinect2 import PyKinectRuntime
 from enum import Enum
-
+import numpy as np
 import pykinect2
 
 class TRACKING_STATE(Enum):
@@ -171,13 +171,12 @@ class bodySkeleton():
                 joints_depths = self._kinect.body_joints_to_depth_space(joints) # maps the camera coordinates to the depth image we keda 
 
                 self.skeletons[i]= self.update_body_points(joints, joint_points, joints_depths, self.skeletons[i])
-                break
         return self.skeletons
     
     def update_body_points(self, joints, joint_points:ndarray, joints_depths: ndarray,skeleton:Skeleton):
         skeleton.tracked=True
         for i in range(PyKinectV2.JointType_Count):
-            j= JOINT(x=joint_points[i].x, y=joint_points[i].y, state=TRACKING_STATE(joints[i].TrackingState))
+            j= JOINT(x=np.rint(joint_points[i].x), y=np.rint(joint_points[i].y), state=TRACKING_STATE(joints[i].TrackingState))
             if self._depth is not None:
                 depth_frame = self._depth.get_kinect_data() # here we get the depth frame 
                 #print(joints_depths[i].x,joints_depths[i].y , depth_frame[int(joints_depths[i].x), int(joints_depths[i].y)] )
