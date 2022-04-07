@@ -83,7 +83,7 @@ class player:
 class clapGame:
     """this is a game that uses the kinect as the basis to choose a main player that will be able to clap with only 1 player being able to clap at a time
     """
-    CHECKPOINT_MS=20 # every 20 milliseconds the system will take a snapshot
+    CHECKPOINT_MS=2 # every 20 milliseconds the system will take a snapshot
 
     def __init__(self) -> None:
         self.players: 'list[player]'= []
@@ -295,5 +295,7 @@ class clapGame:
 
 if __name__=='__main__':
     c= clapGame() # record a game for senario
-    clapGame.load_data_from_disk(c.dir_path_for_saved_files)
+    clapGame.load_data_from_disk(c.dir_path_for_saved_files) # replay the game in 2 ways
+    # 1 is playing the frames of the game with all the UI
+    # 2 simply using the data from the 
     print('finished')
