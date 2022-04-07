@@ -11,7 +11,7 @@ from xmlrpc.client import Boolean
 
 from numpy import dtype
 from body_index import bodyIndex
-from body_skeleton import JOINT, TRACKING_STATE, Skeleton
+from body_skeleton import HAND_STATE, JOINT, TRACKING_STATE, Skeleton
 from depth import depth
 from filters import kernel_average_filter, temporal_average_filter
 from pykinect2 import PyKinectV2
@@ -36,11 +36,22 @@ import pickle
 class GAME_EVENTS(Enum):
     USER_REQUEST_CONTROL = 'USER_REQUEST_CONTROL'
     USER_GIVE_CONTROL = 'USER_GIVE_CONTROL'
-
+    ADD_BRUSH = 'ADD_BRUSH'
+    REMOVE_BRUSH = 'REMOVE_BRUSH'
+class BRUSH_STATE(Enum):
+    DRAWING = 0
+    OFF = 1
+    ERASE = 2
 
 class GESTURES(Enum):
     RAISE_RIGHT_HAND = 1
     RAISE_LEFT_HAND = 2
+    CLOSEING_LEFT_HAND = 3
+    CLOSEING_RIGHT_HAND = 4
+    OPENING_LEFT_HAND = 5
+    OPENING_RIGHT_HAND = 5
+
+
 class player:
     """a class that symbbolises 1 of the players in the game
     """
@@ -86,7 +97,16 @@ class player:
             if self.body.tracked and hand_state and hand_y_pos < shoulder_y_pos + 20: # if the body and the hand are tracked alos the handis higher than shoulder
                 return True
             
-            return False      
+        if gesture == GESTURES.CLOSEING_RIGHT_HAND: # detect if the user is closing their hand
+            if self.body.get_right_hand_state() == HAND_STATE.Closed:
+                return True
+        if gesture == GESTURES.OPENING_RIGHT_HAND: # detect if the user is closing their hand
+            if self.body.get_right_hand_state() == HAND_STATE.Open:
+                return True
+
+        return False  
+
+            
 
 class clapGame:
     """this is a game that uses the kinect as the basis to choose a main player that will be able to clap with only 1 player being able to clap at a time
@@ -104,6 +124,7 @@ class clapGame:
         self.dir_path_for_saved_files =  f"data/{time_now.strftime('%m-%d-%Y,%H-%M-%S')}"
         self.last_chechpoint_time = datetime.now()
         self.xp, self.yp = None, None # this is for drawing purposes # TODO: should return to none after the user changes
+        self.brush: BRUSH_STATE = BRUSH_STATE.OFF
         with tracker() as trkr:
             time.sleep(3)
             self.imgCanvas = np.zeros((trkr._kinect.color_frame_desc.Height, trkr._kinect.color_frame_desc.Width, 3), np.uint8) # set up the image canvas
@@ -164,14 +185,19 @@ class clapGame:
         x2, y2 = np.rint(self.main_user.body.HandTipRight.x).astype(int), np.rint(self.main_user.body.HandTipRight.y).astype(int)
         if  not all((self.xp, self.yp)): # if xp or yp is None
             self.xp, self.yp=x1, y1
-        if self.main_user.doing_gesture(GESTURES.RAISE_LEFT_HAND): # TODO: this will be changed to gesture closed Hand later
+        if self.brush == BRUSH_STATE.OFF: # TODO: this will be changed to gesture closed Hand later
                 # Mode selection Not drawing or moving
                 pass # do not do anything as we do not want to draw yet
 
-        else: # drawing mode
+        elif self.brush == BRUSH_STATE.DRAWING: # drawing mode
             drawColor = (0, 123, 0)
             cv2.line(img, (self.xp, self.yp), (x1, y1), drawColor, brusht)
             cv2.line(self.imgCanvas, (self.xp, self.yp), (x1, y1), drawColor, brusht)
+        elif self.brush == BRUSH_STATE.ERASE: # erase mode
+            drawColor = (0, 0, 0)
+            cv2.line(img, (self.xp, self.yp), (x1, y1), drawColor, brusht)
+            cv2.line(self.imgCanvas, (self.xp, self.yp), (x1, y1), drawColor, brusht)
+
             
         # update the frame I think
         imgGray = cv2.cvtColor(self.imgCanvas, cv2.COLOR_BGR2GRAY)
@@ -217,12 +243,29 @@ class clapGame:
             
         pass
 
+    @smokesignal.on(GAME_EVENTS.ADD_BRUSH)
+    def event_add_brush(self, player:player):
+        """event handler for when the brush should be set"""
+        if player == self.main_user:
+            self.brush = BRUSH_STATE.DRAWING # allow the user to draw
+    @smokesignal.on(GAME_EVENTS.REMOVE_BRUSH)
+    def event_add_brush(self, player:player):
+        """event handler for when the brush should be off the paper"""
+        if player == self.main_user:
+            self.brush = BRUSH_STATE.OFF # allow the user to draw
+        
+        
+
     def detect_actions(self, player: player):
         if player.doing_gesture(GESTURES.RAISE_RIGHT_HAND):
             smokesignal.emit(GAME_EVENTS.USER_REQUEST_CONTROL, self ,player) # if you need the game instance in the event handler then pass it here
         if player.doing_gesture(GESTURES.RAISE_LEFT_HAND):
-            print('player raised left hand but no signal event was assigned')
-            #smokesignal.emit(GAME_EVENTS.USER_GIVE_CONTROL, self)
+            #print('player raised left hand but no signal event was assigned')
+            smokesignal.emit(GAME_EVENTS.USER_GIVE_CONTROL, self)
+        if player.doing_gesture(GESTURES.OPENING_RIGHT_HAND):
+            smokesignal.emit(GAME_EVENTS.REMOVE_BRUSH, self, player)
+        if player.doing_gesture(GESTURES.CLOSEING_RIGHT_HAND):
+            smokesignal.emit(GAME_EVENTS.ADD_BRUSH, self, player)
     def update_main_player(self):
         """Funciton to update the main player by letting him keep the controller or simply removing it from him based on some crieterias
         """

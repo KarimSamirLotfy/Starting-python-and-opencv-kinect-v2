@@ -25,6 +25,23 @@ class TRACKING_STATE(Enum):
     NotTracked =  PyKinectV2.TrackingState_NotTracked
     Infered = PyKinectV2.TrackingState_Inferred
     Tracked = PyKinectV2.TrackingState_Tracked
+class HAND_STATE(Enum):
+    def get_state(val:PyKinectV2._HandState):
+        if val==PyKinectV2.TrackingState_NotTracked:
+            return HAND_STATE.NotTracked
+        elif val==PyKinectV2.HandState_Unknown:
+            return HAND_STATE.Unknown
+        elif val == PyKinectV2.HandState_Open:
+            return HAND_STATE.Open
+        elif val == PyKinectV2.HandState_Lasso:
+            return HAND_STATE.Lasso
+        elif  val==PyKinectV2.HandState_Closed:
+            return HAND_STATE.Closed
+    NotTracked = PyKinectV2.HandState_NotTracked
+    UnKnown = PyKinectV2.HandState_Unknown
+    Closed = PyKinectV2.HandState_Closed
+    Open = PyKinectV2.HandState_Open
+    Lasso = PyKinectV2.HandState_Lasso
 
 @dataclasses.dataclass(unsafe_hash=True)
 class JOINT:
@@ -103,6 +120,7 @@ class Skeleton:
     tracked: bool= None
     def __init__(self) -> None:
         self.old__repr__ = self.__repr__
+        self.KinectBody : PyKinectRuntime.KinectBody = None
 
     def __setitem__(self,joint_index:int ,Joint_value: JOINT):
         setattr(self, index_to_joint_name[joint_index], Joint_value)
@@ -110,6 +128,26 @@ class Skeleton:
     def __getitem__(self,joint_index: int) -> JOINT:
         return getattr(self, index_to_joint_name[joint_index])
 
+    def get_left_hand_state(self) -> HAND_STATE:
+        num_state = self.hand_left_state #TODO: if the confidence is LOW maybe you should not user it
+        hand_state: HAND_STATE = HAND_STATE.get_state(num_state)
+        return hand_state
+    def get_right_hand_state(self) -> HAND_STATE:
+        num_state = self.hand_right_state 
+        hand_state: HAND_STATE = HAND_STATE.get_state(num_state)
+        return hand_state
+
+    def set_kinect_body(self, body: PyKinectRuntime.KinectBody):
+            self.is_restricted = body.is_restricted
+            self.tracking_id = body.tracking_id
+            self.engaged = body.engaged
+            self.lean = body.lean
+            self.lean_tracking_state = body.lean_tracking_state
+            self.hand_left_state = body.hand_left_state
+            self.hand_left_confidence = body.hand_left_confidence
+            self.hand_right_state = body.hand_right_state
+            self.hand_right_confidence = body.hand_right_confidence
+            self.clipped_edges = body.clipped_edges
 
     
 class bodySkeleton():
@@ -171,6 +209,7 @@ class bodySkeleton():
                 joints_depths = self._kinect.body_joints_to_depth_space(joints) # maps the camera coordinates to the depth image we keda 
 
                 self.skeletons[i]= self.update_body_points(joints, joint_points, joints_depths, self.skeletons[i])
+                self.skeletons[i].set_kinect_body(body) # give access to KinectBody Data such as orientation and hand state to make sure the skeleton is an addapter for the Kinec Raw Data
         return self.skeletons
     
     def update_body_points(self, joints, joint_points:ndarray, joints_depths: ndarray,skeleton:Skeleton):
@@ -203,10 +242,10 @@ if __name__ == "__main__":
                      
             for skeleton in a:
                 if skeleton.tracked:
-                    #print(skeleton)
-                    pass
+                    print(skeleton.get_left_hand_state())
+                    time.sleep(0.5)
                 else:
-                    print('-----Untracked Skeleton------')
+                    pass
             #tracker.update_body_points(None, None)
 
 
