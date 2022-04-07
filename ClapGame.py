@@ -43,7 +43,7 @@ class GESTURES(Enum):
 class player:
     """a class that symbbolises 1 of the players in the game
     """
-#     RED = (0, 0, 255)
+# RED = (0, 0, 255)
 # GREEN = (0, 255, 0)
 # BLUE = (255, 0, 0)
 # CYAN = (255, 255, 0)
@@ -82,7 +82,7 @@ class player:
 class clapGame:
     """this is a game that uses the kinect as the basis to choose a main player that will be able to clap with only 1 player being able to clap at a time
     """
-    CHECKPOINT_MS=200 # every 20 milliseconds the system will take a snapshot
+    CHECKPOINT_MS=20 # every 20 milliseconds the system will take a snapshot
 
     def __init__(self) -> None:
         self.players: 'list[player]'= []
@@ -218,26 +218,54 @@ class clapGame:
         # save the player buffer
         filename = f'{dir_path}/players_data.pickle'
         os.makedirs(os.path.dirname(filename), exist_ok=True)
-        with open(filename, 'wb') as handle:
-            pickle.dump(self.players_buffer, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        # with open(filename, 'wb') as handle:
+        #     pickle.dump(self.players_buffer, handle, protocol=pickle.HIGHEST_PROTOCOL)
         
         # save the img buffer
-        filename =f'{dir_path}/image_data.pickle'
-        os.makedirs(os.path.dirname(filename), exist_ok=True)
-        with open(filename, 'wb') as handle:
-            pickle.dump(self.img_buffer, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        # filename =f'{dir_path}/image_data.pickle'
+        # os.makedirs(os.path.dirname(filename), exist_ok=True)
+        # with open(filename, 'wb') as handle:
+        #     pickle.dump(self.img_buffer, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
+        # ? save the img buffer as an cv2 video not a pickle cuz picke is heacy ###
+        img = self.img_buffer[0]
+        height, width, layers = img.shape
+        size = (width,height)
+        FPS = 1000 / self.CHECKPOINT_MS # fps = 1/ delta_time between frames # iguess
+        out = cv2.VideoWriter(filename,cv2.VideoWriter_fourcc(*'DIVX'), 15, size)
+        filename =f'{dir_path}/image_data.avi'
         ### once you are done with those 
+        for img in self.img_buffer:
+            
+            out.write(img)
+
+        out.release()
+            
     
     @staticmethod
     def load_data_from_disk(dir_path:str):
         filename = f'{dir_path}/image_data.pickle'
-        os.makedirs(os.path.dirname(filename), exist_ok=True)
-        with open(filename, 'wb') as handle:
-            img_buffer = pickle.load(handle)
-            print(img_buffer)
+        filename2 = f'{dir_path}/players_data.pickle'
+
+        with open(filename, 'rb') as a, open(filename2, 'rb') as b:
+            img_buffer = pickle.load(a)
+            player_buffer = pickle.load(b)
+            for img, players in zip(img_buffer, player_buffer):
+                # draw the recorded frame data 
+                cv2.imshow('recorded video', img)
+                trkr = tracker()
+                # draw a recreation of the frame data onto another image
+                for player in players:
+                    # here we draw the players as skeletons we keda
+                    trkr.draw_body_bones(img, player.body, color=player.color)# draw the bones of each player
+
+                time.sleep(clapGame.CHECKPOINT_MS/1000) # to make it the same as the time it was recorded in
+                if cv2.waitKey(1) == ord('q'):
+                    break
+            cv2.destroyAllWindows()
+
 
 if __name__=='__main__':
     c= clapGame()
-    clapGame.load_data_from_disk('data/04-06-2022,01-02-30')
+    #clapGame.load_data_from_disk('data/04-06-2022,19-37-12')
     print('finished')
