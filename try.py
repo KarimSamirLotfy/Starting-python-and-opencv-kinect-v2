@@ -78,19 +78,19 @@ while True:
         if fingers[1] and fingers[2]==False: # if drawing mode
             cv2.circle(img, (x1, y1), 15, drawColor, -1)
             #print("Drawing Mode")
-            if xp ==0 and yp == 0:
+            if xp ==0 and yp == 0: # if they are unassinged yet
                 xp, yp = x1, y1
-            if drawColor == (0,0,0):
+            if drawColor == (0,0,0): # erase if the color is 0, 0, 0
                 cv2.line(img, (xp, yp), (x1, y1), drawColor, rubbert)
                 cv2.line(imgCanvas, (xp, yp), (x1, y1), drawColor, rubbert)
-            else:
-
+            else: # here draw
                 cv2.line(img, (xp, yp), (x1, y1), drawColor, brusht)
                 cv2.line(imgCanvas, (xp, yp), (x1, y1), drawColor, brusht)
 
             xp, yp = x1, y1
 
 
+    # update the frame I think
     imgGray = cv2.cvtColor(imgCanvas, cv2.COLOR_BGR2GRAY)
     _, imgInv = cv2.threshold(imgGray, 50, 255, cv2.THRESH_BINARY_INV)
     imgInv = cv2.cvtColor(imgInv, cv2.COLOR_GRAY2BGR)
@@ -101,10 +101,10 @@ while True:
 
 
     #setting head image
-    img[0:133, 100:1180] = header
+    img[0:133, 100:1180] = header # Pic ui if neeeded
     #img = cv2.addWeighted(img, 0.5, imgCanvas, 0.5, 0)
-    cv2.imshow("AI VIRTUAL PAINTER", img)
-    cv2.imshow("DRAWING BOARD", imgCanvas)
+    cv2.imshow("AI VIRTUAL PAINTER", img) # showing Image
+    # cv2.imshow("DRAWING BOARD", imgCanvas) # show the drawwing canvas or something
 
     k = cv2.waitKey(1)
     if cv2.waitKey(1) and k == 27:

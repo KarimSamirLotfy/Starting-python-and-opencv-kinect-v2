@@ -77,6 +77,14 @@ class player:
             # TODO: this is too simple we need somehting to caluclate angle between wrist and elbow to create wheather the hand is raised or not
             if self.body.tracked and hand_state and hand_y_pos < shoulder_y_pos + 20: # if the body and the hand are tracked alos the handis higher than shoulder
                 return True
+
+        if gesture == GESTURES.RAISE_LEFT_HAND: # detect if the user raised his right hand 
+            # if wrist is higher than shoulder then simply detect right hand
+            hand_y_pos, hand_state = self.body.WristLeft.y, self.body.WristLeft.state
+            shoulder_y_pos= self.body.ShoulderLeft.y
+            # TODO: this is too simple we need somehting to caluclate angle between wrist and elbow to create wheather the hand is raised or not
+            if self.body.tracked and hand_state and hand_y_pos < shoulder_y_pos + 20: # if the body and the hand are tracked alos the handis higher than shoulder
+                return True
             
             return False      
 
@@ -87,7 +95,7 @@ class clapGame:
 
     def __init__(self) -> None:
         self.players: 'list[player]'= []
-        self.main_user: player = None
+        self.main_user: 'player' = None
         self.requesting_players = [] # a quee of requesting players so that if 2 ppl request then they get it in order
         self.img_buffer: 'list[np.array]' = []
         self.players_buffer = []
@@ -95,10 +103,10 @@ class clapGame:
         time_now = datetime.now()
         self.dir_path_for_saved_files =  f"data/{time_now.strftime('%m-%d-%Y,%H-%M-%S')}"
         self.last_chechpoint_time = datetime.now()
+        self.xp, self.yp = None, None # this is for drawing purposes # TODO: should return to none after the user changes
         with tracker() as trkr:
             time.sleep(3)
-            timeout = 20000   # [seconds]
-            timeout_start = time.time()
+            self.imgCanvas = np.zeros((trkr._kinect.color_frame_desc.Height, trkr._kinect.color_frame_desc.Width, 3), np.uint8) # set up the image canvas
             
             while True:
                 
@@ -110,28 +118,28 @@ class clapGame:
                     self.update_players(body)
                 
 
-                img = np.zeros((trkr._kinect.color_frame_desc.Height, trkr._kinect.color_frame_desc.Width, 4)) # create a black image to draw each player on 
+                img = np.zeros((trkr._kinect.color_frame_desc.Height, trkr._kinect.color_frame_desc.Width, 3), np.uint8) # create a black image to draw each player on 
+
                 
                 for player in self.players:
-                    # here we draw the players as skeletons we keda
-                    trkr.draw_body_bones(img, player.body, color=player.color)# draw the bones of each player
-                    self.draw_player_status(img, player)
                     self.detect_actions(player) # detects players actions
- 
                     ### HERE WE ADD THE HERISTICS OF GIVING THE CONTROLLER OR REMOVING IT
                     self.update_main_player()
 
-                    # draw an indicator if the current main player
-                    if self.main_user is not None: # if someone has the controller then we should show him with a status
-                        cv2.circle(img, center=( int(self.main_user.body.SpineMid.x), int(self.main_user.body.SpineMid.y)), color=(255, 0, 0), radius=50, thickness=-1)
-                    
-                    # draw an indicator of the current next requesting players
-                    for idx, player in enumerate(self.requesting_players):
-                        cv2.circle(img, center=( int(player.body.SpineMid.x), int(player.body.SpineMid.y)), color=(0, 0, 255), radius=50, thickness=-1)
-                        cv2.putText(img, f'{idx+1}', ( int(player.body.SpineMid.x), int(player.body.SpineMid.y)), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 0), 3, cv2.LINE_AA)
+                    ### ___ DRAWING ____###
+                    # here we draw the players as skeletons we keda
+                    trkr.draw_body_bones(img, player.body, color=player.color)# draw the bones of each player
+                    self.draw_player_status(img, player) # draw the player status for debugging
 
                 
+                self.draw_main_player_indicator(img) # draw an indicator of current main player
+                
+                self.draw_requesting_players_indicator(img)# draw an indicator for the reqesting players
+                    
+                img = self.main_player_paint(img) # must return the img as this is not a cv2 simple funciton
+                
                 cv2.imshow('Clap game', img)
+                # saving the game status
                 if self.time_to_take_snapshot():
                     self.checkpoint(img) 
 
@@ -143,15 +151,57 @@ class clapGame:
         cv2.destroyAllWindows()
 
         self.save_data_to_disk()
+
+    def main_player_paint(self, img):
+        """here we add the paint brush to make the game layout"""
+        # Constants 
+        brusht = 15
+        rubbert = 100
+        if self.main_user is None:
+            return img
+        # img = cv2.flip(img, 1) # for some reason flip it ????
+        x1, y1 = np.rint(self.main_user.body.HandRight.x).astype(int), np.rint(self.main_user.body.HandRight.y).astype(int)
+        x2, y2 = np.rint(self.main_user.body.HandTipRight.x).astype(int), np.rint(self.main_user.body.HandTipRight.y).astype(int)
+        if  not all((self.xp, self.yp)): # if xp or yp is None
+            self.xp, self.yp=x1, y1
+        if self.main_user.doing_gesture(GESTURES.RAISE_LEFT_HAND): # TODO: this will be changed to gesture closed Hand later
+                # Mode selection Not drawing or moving
+                pass # do not do anything as we do not want to draw yet
+
+        else: # drawing mode
+            drawColor = (0, 123, 0)
+            cv2.line(img, (self.xp, self.yp), (x1, y1), drawColor, brusht)
+            cv2.line(self.imgCanvas, (self.xp, self.yp), (x1, y1), drawColor, brusht)
+            
+        # update the frame I think
+        imgGray = cv2.cvtColor(self.imgCanvas, cv2.COLOR_BGR2GRAY)
+        _, imgInv = cv2.threshold(imgGray, 50, 255, cv2.THRESH_BINARY_INV)
+        imgInv = cv2.cvtColor(imgInv, cv2.COLOR_GRAY2BGR)
+        img = cv2.bitwise_and(img, imgInv)
+        img = cv2.bitwise_or(img, self.imgCanvas)
+        self.xp, self.yp = x1, y1 # save this as the new position previous
+        return img
+
+
                 
-                
+    def draw_main_player_indicator(self, img):
+        if self.main_user is not None: # if someone has the controller then we should show him with a status
+            cv2.circle(img, center=( int(self.main_user.body.SpineMid.x), int(self.main_user.body.SpineMid.y)), color=(255, 0, 0), radius=50, thickness=-1)
+                    
+    def draw_requesting_players_indicator(self, img):
+        for idx, player in enumerate(self.requesting_players):
+            cv2.circle(img, center=( int(player.body.SpineMid.x), int(player.body.SpineMid.y)), color=(0, 0, 255), radius=50, thickness=-1)
+            cv2.putText(img, f'{idx+1}', ( int(player.body.SpineMid.x), int(player.body.SpineMid.y)), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 0), 3, cv2.LINE_AA)
 
 
     # GAME EVENTS HANDLERS
     @smokesignal.on(GAME_EVENTS.USER_GIVE_CONTROL)
     def event_user_give_control(self):
         # if this user gave controll then 
-        self.main_user = self.requesting_players.pop() # make the next in line the main user
+        if len(self.requesting_players) == 0: # if no one is requesting and the user gave up the controll 
+            self.main_user = None
+        else:
+            self.main_user = self.requesting_players.pop() # make the next in line the main user
 
     @smokesignal.on(GAME_EVENTS.USER_REQUEST_CONTROL)
     def event_user_request_control(self, player:player):
@@ -171,7 +221,8 @@ class clapGame:
         if player.doing_gesture(GESTURES.RAISE_RIGHT_HAND):
             smokesignal.emit(GAME_EVENTS.USER_REQUEST_CONTROL, self ,player) # if you need the game instance in the event handler then pass it here
         if player.doing_gesture(GESTURES.RAISE_LEFT_HAND):
-            smokesignal.emit(GAME_EVENTS.USER_GIVE_CONTROL, self)
+            print('player raised left hand but no signal event was assigned')
+            #smokesignal.emit(GAME_EVENTS.USER_GIVE_CONTROL, self)
     def update_main_player(self):
         """Funciton to update the main player by letting him keep the controller or simply removing it from him based on some crieterias
         """
@@ -213,9 +264,8 @@ class clapGame:
             self.video_writer = cv2.VideoWriter(filename,cv2.VideoWriter_fourcc(*'MJPG'), 24, size)
             
 
-        image_without_alpha = img[:,:,:3]
-        image_without_alpha = image_without_alpha.astype('uint8') # super important
-        self.video_writer.write(image_without_alpha)
+        
+        self.video_writer.write(img)
         
     def time_to_take_snapshot(self):
         miliseconds = (datetime.now() - self.last_chechpoint_time) / timedelta(milliseconds=1)
@@ -295,7 +345,7 @@ class clapGame:
 
 if __name__=='__main__':
     c= clapGame() # record a game for senario
-    clapGame.load_data_from_disk(c.dir_path_for_saved_files) # replay the game in 2 ways
+    #clapGame.load_data_from_disk(c.dir_path_for_saved_files) # replay the game in 2 ways
     # 1 is playing the frames of the game with all the UI
     # 2 simply using the data from the 
     print('finished')
