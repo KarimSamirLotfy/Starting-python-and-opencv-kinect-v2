@@ -3,6 +3,7 @@ from datetime import date, datetime, timedelta
 import math
 from operator import index
 import random
+import sys
 import time
 from tkinter import S
 from unittest import case
@@ -90,7 +91,9 @@ class clapGame:
         self.requesting_players = [] # a quee of requesting players so that if 2 ppl request then they get it in order
         self.img_buffer: 'list[np.array]' = []
         self.players_buffer = []
-        
+        self.video_writer = None
+        time_now = datetime.now()
+        self.dir_path_for_saved_files =  f"data/{time_now.strftime('%m-%d-%Y,%H-%M-%S')}"
         self.last_chechpoint_time = datetime.now()
         with tracker() as trkr:
             time.sleep(3)
@@ -130,7 +133,7 @@ class clapGame:
                 
                 cv2.imshow('Clap game', img)
                 if self.time_to_take_snapshot():
-                    self.checkpoint(img)
+                    self.checkpoint(img) 
 
                 
                 if cv2.waitKey(1) == ord('q'):
@@ -199,9 +202,21 @@ class clapGame:
 
     def checkpoint(self, img:np.array):
         # here we take a snapshot of the system by saving the players array 
-        self.players_buffer.append(pickle.dumps(self.players)) # save the state of the players array 
-        self.img_buffer.append(img) # save the img that was rendered to be able to play it back 
+        self.players_buffer.append(pickle.dumps(self.players, protocol=pickle.HIGHEST_PROTOCOL)) # save the state of the players array 
+        #self.img_buffer.append(img) # save the img that was rendered to be able to play it back 
+        filename =f'{self.dir_path_for_saved_files}/image_data.avi'
+        if self.video_writer is None:
+            height, width, layers = img.shape
+            size = (width,height)
+            FPS = 1000 / self.CHECKPOINT_MS # fps = 1/ delta_time between frames # iguess
+            os.makedirs(os.path.dirname(filename), exist_ok=True) # make the directrory
+            self.video_writer = cv2.VideoWriter(filename,cv2.VideoWriter_fourcc(*'MJPG'), 24, size)
+            
 
+        image_without_alpha = img[:,:,:3]
+        image_without_alpha = image_without_alpha.astype('uint8') # super important
+        self.video_writer.write(image_without_alpha)
+        
     def time_to_take_snapshot(self):
         miliseconds = (datetime.now() - self.last_chechpoint_time) / timedelta(milliseconds=1)
         if  miliseconds > self.CHECKPOINT_MS : # if enoguh time passed from the last checkpoint then return true
@@ -214,12 +229,12 @@ class clapGame:
         """        
         # first create a directory to save this to having a name with the date this game was played in
         time_now = datetime.now()
-        dir_path = f"data/{time_now.strftime('%m-%d-%Y,%H-%M-%S')}"
+        dir_path = self.dir_path_for_saved_files
         # save the player buffer
         filename = f'{dir_path}/players_data.pickle'
         os.makedirs(os.path.dirname(filename), exist_ok=True)
-        # with open(filename, 'wb') as handle:
-        #     pickle.dump(self.players_buffer, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        with open(filename, 'wb') as handle:
+            pickle.dump(self.players_buffer, handle, protocol=pickle.HIGHEST_PROTOCOL)
         
         # save the img buffer
         # filename =f'{dir_path}/image_data.pickle'
@@ -228,44 +243,57 @@ class clapGame:
         #     pickle.dump(self.img_buffer, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
         # ? save the img buffer as an cv2 video not a pickle cuz picke is heacy ###
-        img = self.img_buffer[0]
-        height, width, layers = img.shape
-        size = (width,height)
-        FPS = 1000 / self.CHECKPOINT_MS # fps = 1/ delta_time between frames # iguess
-        out = cv2.VideoWriter(filename,cv2.VideoWriter_fourcc(*'DIVX'), 15, size)
-        filename =f'{dir_path}/image_data.avi'
-        ### once you are done with those 
-        for img in self.img_buffer:
+        # img = self.img_buffer[0]
+        # height, width, layers = img.shape
+        # size = (width,height)
+        # FPS = 1000 / self.CHECKPOINT_MS # fps = 1/ delta_time between frames # iguess
+        # out = cv2.VideoWriter(filename,cv2.VideoWriter_fourcc(*'DIVX'), 15, size)
+        # filename =f'{dir_path}/image_data.avi'
+        # ### once you are done with those 
+        # for img in self.img_buffer:
             
-            out.write(img)
+        #     out.write(img)
 
-        out.release()
+        # out.release()
+        self.video_writer.release()
             
     
     @staticmethod
     def load_data_from_disk(dir_path:str):
-        filename = f'{dir_path}/image_data.pickle'
+        filename = f'{dir_path}/image_data.avi'
         filename2 = f'{dir_path}/players_data.pickle'
+        cap = cv2.VideoCapture(filename)
 
-        with open(filename, 'rb') as a, open(filename2, 'rb') as b:
-            img_buffer = pickle.load(a)
-            player_buffer = pickle.load(b)
-            for img, players in zip(img_buffer, player_buffer):
-                # draw the recorded frame data 
-                cv2.imshow('recorded video', img)
-                trkr = tracker()
+        with open(filename2, 'rb') as a:
+            trkr = tracker()
+            player_buffer = pickle.load(a)
+            if (cap.isOpened()== False):
+                print("Error opening video stream or file")
+                return
+
+            
+            for players in player_buffer:
+                players = pickle.loads(players)
+                img = np.zeros((trkr._kinect.color_frame_desc.Height, trkr._kinect.color_frame_desc.Width, 4)) # create a black image to draw each player on 
+                
                 # draw a recreation of the frame data onto another image
                 for player in players:
                     # here we draw the players as skeletons we keda
                     trkr.draw_body_bones(img, player.body, color=player.color)# draw the bones of each player
-
+                # draw the recorded frame data 
+                cv2.imshow('recreational video', img) # this is the recreation from the body recorded data
+                ret, frame = cap.read() # get the next frame from the video player
+                if ret == True:
+                    cv2.imshow('Actuall recorded Video',frame) # this is the actuall recorded video
+                else:
+                    print('no frame here')
                 time.sleep(clapGame.CHECKPOINT_MS/1000) # to make it the same as the time it was recorded in
                 if cv2.waitKey(1) == ord('q'):
                     break
             cv2.destroyAllWindows()
-
+            cap.release()
 
 if __name__=='__main__':
-    c= clapGame()
-    #clapGame.load_data_from_disk('data/04-06-2022,19-37-12')
+    c= clapGame() # record a game for senario
+    clapGame.load_data_from_disk(c.dir_path_for_saved_files)
     print('finished')
