@@ -178,34 +178,35 @@ class clapGame:
         # Constants 
         brusht = 15
         rubbert = 100
-        if self.main_user is None:
-            return img
-        # img = cv2.flip(img, 1) # for some reason flip it ????
-        x1, y1 = np.rint(self.main_user.body.HandRight.x).astype(int), np.rint(self.main_user.body.HandRight.y).astype(int)
-        x2, y2 = np.rint(self.main_user.body.HandTipRight.x).astype(int), np.rint(self.main_user.body.HandTipRight.y).astype(int)
-        if  not all((self.xp, self.yp)): # if xp or yp is None
-            self.xp, self.yp=x1, y1
-        if self.brush == BRUSH_STATE.OFF: # TODO: this will be changed to gesture closed Hand later
-                # Mode selection Not drawing or moving
-                pass # do not do anything as we do not want to draw yet
-
-        elif self.brush == BRUSH_STATE.DRAWING: # drawing mode
-            drawColor = (0, 123, 0)
-            cv2.line(img, (self.xp, self.yp), (x1, y1), drawColor, brusht)
-            cv2.line(self.imgCanvas, (self.xp, self.yp), (x1, y1), drawColor, brusht)
-        elif self.brush == BRUSH_STATE.ERASE: # erase mode
-            drawColor = (0, 0, 0)
-            cv2.line(img, (self.xp, self.yp), (x1, y1), drawColor, brusht)
-            cv2.line(self.imgCanvas, (self.xp, self.yp), (x1, y1), drawColor, brusht)
-
+        if self.main_user is not None: 
             
+            x1, y1 = np.rint(self.main_user.body.HandRight.x).astype(int), np.rint(self.main_user.body.HandRight.y).astype(int)
+            x2, y2 = np.rint(self.main_user.body.HandTipRight.x).astype(int), np.rint(self.main_user.body.HandTipRight.y).astype(int)
+            if  not all((self.xp, self.yp)): # if xp or yp is None
+                self.xp, self.yp=x1, y1
+            if self.brush == BRUSH_STATE.OFF: # TODO: this will be changed to gesture closed Hand later
+                    # Mode selection Not drawing or moving
+                    pass # do not do anything as we do not want to draw yet
+
+            elif self.brush == BRUSH_STATE.DRAWING: # drawing mode
+                drawColor = (0, 123, 0)
+                cv2.line(img, (self.xp, self.yp), (x1, y1), drawColor, brusht)
+                cv2.line(self.imgCanvas, (self.xp, self.yp), (x1, y1), drawColor, brusht)
+            elif self.brush == BRUSH_STATE.ERASE: # erase mode
+                drawColor = (0, 0, 0)
+                cv2.line(img, (self.xp, self.yp), (x1, y1), drawColor, brusht)
+                cv2.line(self.imgCanvas, (self.xp, self.yp), (x1, y1), drawColor, brusht)
+
+            self.xp, self.yp = x1, y1 # save this as the new position previous
+
+
+                
         # update the frame I think
         imgGray = cv2.cvtColor(self.imgCanvas, cv2.COLOR_BGR2GRAY)
         _, imgInv = cv2.threshold(imgGray, 50, 255, cv2.THRESH_BINARY_INV)
         imgInv = cv2.cvtColor(imgInv, cv2.COLOR_GRAY2BGR)
         img = cv2.bitwise_and(img, imgInv)
         img = cv2.bitwise_or(img, self.imgCanvas)
-        self.xp, self.yp = x1, y1 # save this as the new position previous
         return img
 
 
@@ -228,6 +229,7 @@ class clapGame:
             self.main_user = None
         else:
             self.main_user = self.requesting_players.pop() # make the next in line the main user
+            self.xp, self.py = None, None # so that the new user can start drawing from his own position
 
     @smokesignal.on(GAME_EVENTS.USER_REQUEST_CONTROL)
     def event_user_request_control(self, player:player):
