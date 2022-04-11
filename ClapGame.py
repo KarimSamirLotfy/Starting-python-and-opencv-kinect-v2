@@ -31,6 +31,8 @@ import smokesignal
 # for writing on disk
 import os
 import pickle
+# for manupilating of 3d geomertry
+from sympy import Plane, Point3D, Polygon, Triangle
 
 
 class GAME_EVENTS(Enum):
@@ -106,7 +108,39 @@ class player:
 
         return False  
 
-            
+    def get_facing_camera_ratio(self):
+        # construct a plane from the 3 points in the body  2 shoulders and spine base
+        joint_1=self.body.ShoulderLeft
+        joint_2=self.body.ShoulderRight
+        joint_3=self.body.SpineBase
+        # p1=Point3D(joint_1.cam_raw_data['x'], joint_1.cam_raw_data['y'], joint_1.cam_raw_data['z']) # TODO: handel None values by trying other points then simply keep the old point
+        # p2=Point3D(joint_2.cam_raw_data['x'], joint_2.cam_raw_data['y'], joint_2.cam_raw_data['z']) # TODO: handel None values by trying other points then simply keep the old point
+        # p3=Point3D(joint_3.cam_raw_data['x'], joint_3.cam_raw_data['y'], joint_3.cam_raw_data['z']) # TODO: handel None values by trying other points then simply keep the old point
+        p1= np.array([v for k, v in joint_1.cam_raw_data.items()])
+        p2= np.array([v for k, v in joint_2.cam_raw_data.items()])
+        p3= np.array([v for k, v in joint_3.cam_raw_data.items()])
+
+        body_plane: Plane= np.array([p1, p2, p3])
+        # These two vectors are in the plane
+        v1 = p3 - p1
+        v2 = p2 - p1
+        # the cross product is a vector normal to the plane
+        normal_vector = np.cross(v2, v1)
+        
+        l=np.array([p1, p2, p3])
+        center = l.mean(axis=0)
+        
+        camera_pos = np.array([0, 0, 0])
+        vector_towards_camera = camera_pos -center # assuming camera POS is (0, 0, 0)
+        dot_product = np.dot(vector_towards_camera, normal_vector)
+        vector_a =  vector_towards_camera/np.linalg.norm(vector_towards_camera) # normalize vecotr
+
+        #vector_a = np.array([0, 0, -1]) # trying a vector that says you are looking at the device in general TODO: choose one of the 2 implemtations
+        vector_b =  normal_vector/np.linalg.norm(normal_vector) # normalize vecotr
+
+        angle = np.arccos(np.clip(np.dot(vector_a, vector_b), -1.0, 1.0))
+        angle = np.degrees(angle)
+        return angle, vector_b, vector_a
 
 class clapGame:
     """this is a game that uses the kinect as the basis to choose a main player that will be able to clap with only 1 player being able to clap at a time
@@ -152,12 +186,14 @@ class clapGame:
                     trkr.draw_body_bones(img, player.body, color=player.color)# draw the bones of each player
                     self.draw_player_status(img, player) # draw the player status for debugging
 
-                
+                    #self.player_chest_plane(img, player)
                 self.draw_main_player_indicator(img) # draw an indicator of current main player
                 
                 self.draw_requesting_players_indicator(img)# draw an indicator for the reqesting players
                     
                 img = self.main_player_paint(img) # must return the img as this is not a cv2 simple funciton
+                
+                # draw only a triangle between the 3 joints
                 
                 cv2.imshow('Clap game', img)
                 # saving the game status
@@ -172,14 +208,29 @@ class clapGame:
         cv2.destroyAllWindows()
 
         self.save_data_to_disk()
+    def player_chest_plane(self, img, player: player):
+        joint_1=player.body.ShoulderLeft
+        joint_2=player.body.ShoulderRight
+        joint_3=player.body.SpineBase
+        p1 = (joint_1.x, joint_1.y)
+        p1 =  tuple(int(x) for x in p1)
+        p2 = (joint_2.x, joint_2.y)
+        p2 =  tuple(int(x) for x in p2)
 
+        p3 = (joint_3.x, joint_3.y)
+        p3 =  tuple(int(x) for x in p3)
+
+        cv2.line(img, p1, p2, (255, 0, 0), 3)
+        cv2.line(img, p2, p3, (255, 0, 0), 3)
+        cv2.line(img, p1, p3, (255, 0, 0), 3)
+        return img
     def main_player_paint(self, img):
         """here we add the paint brush to make the game layout"""
         # Constants 
         brusht = 15
         rubbert = 100
         if self.main_user is not None: 
-            
+
             x1, y1 = np.rint(self.main_user.body.HandRight.x).astype(int), np.rint(self.main_user.body.HandRight.y).astype(int)
             x2, y2 = np.rint(self.main_user.body.HandTipRight.x).astype(int), np.rint(self.main_user.body.HandTipRight.y).astype(int)
             if  not all((self.xp, self.yp)): # if xp or yp is None
@@ -262,8 +313,8 @@ class clapGame:
         if player.doing_gesture(GESTURES.RAISE_RIGHT_HAND):
             smokesignal.emit(GAME_EVENTS.USER_REQUEST_CONTROL, self ,player) # if you need the game instance in the event handler then pass it here
         if player.doing_gesture(GESTURES.RAISE_LEFT_HAND):
-            #print('player raised left hand but no signal event was assigned')
-            smokesignal.emit(GAME_EVENTS.USER_GIVE_CONTROL, self)
+            if self.main_user == player: # if he is the main player
+                smokesignal.emit(GAME_EVENTS.USER_GIVE_CONTROL, self)
         if player.doing_gesture(GESTURES.OPENING_RIGHT_HAND):
             smokesignal.emit(GAME_EVENTS.REMOVE_BRUSH, self, player)
         if player.doing_gesture(GESTURES.CLOSEING_RIGHT_HAND):
@@ -276,7 +327,16 @@ class clapGame:
 
     def draw_player_status(self, img:np.array, player:player):
         # 
-        strings_to_show= [f"ID:", f"Number of claps", f"requesting:{player.doing_gesture(GESTURES.RAISE_RIGHT_HAND)}"]
+        strings_to_show = []
+        #strings_to_show= [f"ID:", f"Number of claps", f"requesting:{player.doing_gesture(GESTURES.RAISE_RIGHT_HAND)}"]
+        raw_data = [f'{k}:{v:.2f}' for k, v in player.body.HandLeft.cam_raw_data.items()]
+        angle, normal, vec = player.get_facing_camera_ratio()
+        strings_to_show.append(f'angle:{angle:.2f}')
+        
+        strings_to_show.append(f'{np.round(normal, decimals=2)}')
+        strings_to_show.append(f'{np.round(vec, decimals=2)}')
+
+        strings_to_show = strings_to_show + raw_data
         pos_of_head_x, pos_of_head_y = int(player.body.Head.x), int(player.body.Head.y)
         
         for idx, string in enumerate(strings_to_show):

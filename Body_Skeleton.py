@@ -52,6 +52,7 @@ class JOINT:
     state: TRACKING_STATE
     # optional
     z: Union[float, None] = None
+    cam_raw_data : 'dict[str, float]' = None # contains the camera raw data of the joint in case it is needed
 
 index_to_joint_name = {
     0:'SpineBase',
@@ -186,6 +187,8 @@ class bodySkeleton():
         self._kinect.close()
         print('bodySkeleton end')
 
+    
+
     def get_kinect_data(self) -> 'list[Skeleton]':
     # here we get the body data from kinect or simply keep the old data
         if self._kinect.has_new_body_frame(): 
@@ -216,6 +219,8 @@ class bodySkeleton():
         skeleton.tracked=True
         for i in range(PyKinectV2.JointType_Count):
             j= JOINT(x=np.rint(joint_points[i].x), y=np.rint(joint_points[i].y), state=TRACKING_STATE(joints[i].TrackingState))
+            pos = joints[i].Position
+            j.cam_raw_data = {'x':pos.x, 'y':pos.y, 'z':pos.z}
             if self._depth is not None:
                 depth_frame = self._depth.get_kinect_data() # here we get the depth frame 
                 #print(joints_depths[i].x,joints_depths[i].y , depth_frame[int(joints_depths[i].x), int(joints_depths[i].y)] )
